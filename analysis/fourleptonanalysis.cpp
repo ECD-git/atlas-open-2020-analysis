@@ -4,11 +4,51 @@
 #include<TFile.h>
 #include<TTree.h>
 #include<TH1F.h>
+#include<Math/Vector4D.h>
 
 // enter data directory path
 std::filesystem::path DATADIRECTORY = "/Users/ecd/Desktop/Academic Work/ATLAS-OPEN-2020-13TEV/4lep";
 std::filesystem::path lepA = "Data/data_A.4lep.root";
 
+// MY OWN FOUR VECTOR STRUCT
+// Deprecated in favour of ROOT 4vector library, but useful to see exactly how the calculation goes
+struct FourVector
+{
+    double px,py,pz,E;
+};
+
+FourVector Make_Four_Vector(double pt, double eta, double phi, double E)
+{
+    FourVector v;
+    v.px = pt * cos(phi);
+    v.py = pt * sin(phi);
+    v.pz = pt * sinh(eta);
+    v.E = E;
+    return v;
+}
+
+FourVector Sum_Four_Vector(const std::vector<FourVector> &vectors)
+{
+    FourVector sum = {0,0,0,0};
+    for (auto &v : vectors)
+    {
+        sum.px += v.px;
+        sum.py += v.py;
+        sum.pz += v.pz;
+        sum.E += v.E;
+    }
+    return sum;
+}
+double My_Calc_Invariant_Mass(const FourVector &vector)
+{
+    double pSq = vector.px*vector.px + vector.py*vector.py + vector.pz*vector.pz;
+    // M^2 = E^2 - P^2
+    double mSq = vector.E*vector.E - pSq;
+    return sqrt(mSq);
+}
+
+
+// ANALYSIS FUNCTIONS
 bool Cut_Lep_Type(std::vector<unsigned int> *lep_type, bool print=false)
 {
     // sum the lepton types for each entry, electron is 11, muon is 13,
@@ -47,6 +87,26 @@ bool Cut_Lep_Charge(std::vector<int> *lep_charge, bool print=false)
     return chargeCutOff;
 }
 
+double Calc_Invariant_Mass(UInt_t lep_n, std::vector<float> *pt, std::vector<float> *eta, std::vector<float> *phi, std::vector<float> *E)
+{
+    // pt -> momentum perpendicular to beam
+    // eta -> pseudorapidity -> angle rel to beam dir
+    // phi -> azimuthal angle
+    // E -> energy of lepton
+    std::vector<ROOT::Math::PtEtaPhiEVector> leptonsFour;
+    for(int i=0; i<lep_n; i++)
+    {
+        ROOT::Math::PtEtaPhiEVector temp(pt->at(i), eta->at(i), phi->at(i), E->at(i));
+        leptonsFour.push_back(temp);
+    }
+    // sum the 4 vectors of the leptons and get invariant mass of resulting system
+    ROOT::Math::PtEtaPhiEVector sumFour;
+    for (auto &l : leptonsFour) sumFour += l;
+
+    return sumFour.M()/1000; // MeV to GeV converstion here
+}
+
+// MAIN METHOD
 void fourleptonanalysis() {
     // OPEN FILE
 
@@ -105,6 +165,9 @@ void fourleptonanalysis() {
     for(int i=0;i<nEntries;i++)
     {
         tree->GetEntry(i);
+        // TODO:
+        // Check for low transverse momentum, tight_ID and if lepton is isolated outside a jet
+
         if (lep_n != 4) continue; // we are interested only in 4 leptons
         // this is already the case for the data set im using but worth adding in incase i switch to others
 
@@ -112,15 +175,22 @@ void fourleptonanalysis() {
         bool typeCutOff = Cut_Lep_Type(lep_type, true);
         // cut off entries with leptons that dont add up to 0 total charge
         bool chargeCutOff = Cut_Lep_Charge(lep_charge, true);
-        std::cout<<std::endl;
         // continue if we are skipping
         if (typeCutOff || chargeCutOff)
         {
+            std::cout<<std::endl;
             continue;
         }
-        // calculate COM energy here V
+        // calculate COM energy here using ROOT library
+        double invarMass = Calc_Invariant_Mass(lep_n, lep_pt, lep_eta, lep_phi, lep_E);
+        std::cout<<"Invariant mass of leptons = "<<invarMass<<" GeV"<<std::endl;
+
+        // save result to histogram
+        h_mass->Fill(invarMass);
+        
+        std::cout<<std::endl;
     }
-    
+
     file->Close();
     std::cout<<"Sucessful execution."<<std::endl;
 }
