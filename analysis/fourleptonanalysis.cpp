@@ -117,6 +117,8 @@ void fourleptonanalysis() {
     if(!tree){
         std::cerr << "Could not find tree 'mini' in file." <<std::endl;
         return;
+    } else {
+        std::cout<<"SUCCESSFULLY READ file "<<(DATADIRECTORY/lepA).string()<<std::endl;
     }
 
     // TRACK NEEDED VARS, lifted from the jupyter notebook from the open data release
@@ -153,7 +155,7 @@ void fourleptonanalysis() {
     //tree->SetBranchAddress("lep_trackd0pvunbiased", &lep_trackd0pvunbiased);
     //tree->SetBranchAddress("lep_tracksigd0pvunbiased", &lep_tracksigd0pvunbiased);
 
-    TH1F *h_mass = new TH1F("h_mass", "Four-lepton invariant mass; m_{4l} [GeV]; Events", 36, 80, 170);
+    TH1F *h_mass = new TH1F("h_mass", "Four-lepton invariant mass; m_{4l} [GeV]; Events", 36, 80, 250);
 
     Long64_t nEntries = tree->GetEntries(); // get number of entries, 39 for file A
     // im passing this as a long64_t since I imagine for full data sets the number of entries can excede the size of a 32 bit integer but its likely not needed for this exact use case
@@ -190,6 +192,12 @@ void fourleptonanalysis() {
         
         std::cout<<std::endl;
     }
+
+    // lets draw the data
+    // TODO stop this opening a window for some reason its a little annoying
+    TCanvas *c1 = new TCanvas("c1", "c1");
+    h_mass->Draw("E");
+    c1->SaveAs("four_lepton_mass.png");
 
     file->Close();
     std::cout<<"Sucessful execution."<<std::endl;
