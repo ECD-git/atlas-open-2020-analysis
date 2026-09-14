@@ -4,5 +4,6 @@ A four lepton analysis to find the mass of the Higgs boson, using the 2020 Cern 
 V0.0
 - Read root files downloaded from CERN data releases.
 - Apply calculations to data read from data files.
+- Invariant mass calculation to 4lepton data sets. (through my own 4vector library as well as ROOT's inbuilt one)
 
 
