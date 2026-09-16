@@ -1,14 +1,25 @@
 // An analysis program designed to search for the higgs boson through the decay of two Z bosons into 4 leptons
 
 #include<filesystem>
+#include<map>
+#include<string>
+#include <fstream>
+#include <iostream>
+
+#include "json.hpp"
 #include<TFile.h>
 #include<TTree.h>
 #include<TH1F.h>
 #include<Math/Vector4D.h>
 
 // enter data directory path
-std::filesystem::path DATADIRECTORY = "/Users/ecd/Desktop/Academic Work/ATLAS-OPEN-2020-13TEV/4lep";
-std::filesystem::path lepA = "Data/data_A.4lep.root";
+
+std::filesystem::path FILEPATH = __FILE__;
+std::filesystem::path DATADIRECTORY = FILEPATH.parent_path()/"4lep/Data/";
+std::filesystem::path MCDIRECTORY = FILEPATH.parent_path()/"4lep/MC";
+std::filesystem::path testLepA = "data_A.4lep.root";
+std::filesystem::path MCINFOPATH = FILEPATH.parent_path()/"mcinfofile.json";
+
 
 // MY OWN FOUR VECTOR STRUCT
 // Deprecated in favour of ROOT 4vector library, but useful to see exactly how the calculation goes
@@ -16,7 +27,6 @@ struct FourVector
 {
     double px,py,pz,E;
 };
-
 FourVector Make_Four_Vector(double pt, double eta, double phi, double E)
 {
     FourVector v;
@@ -26,7 +36,6 @@ FourVector Make_Four_Vector(double pt, double eta, double phi, double E)
     v.E = E;
     return v;
 }
-
 FourVector Sum_Four_Vector(const std::vector<FourVector> &vectors)
 {
     FourVector sum = {0,0,0,0};
@@ -47,6 +56,41 @@ double My_Calc_Invariant_Mass(const FourVector &vector)
     return sqrt(mSq);
 }
 
+// MC DATA FILE STRUCT
+struct MCInfo 
+{
+    long DSID;
+    double events;
+    double red_eff;
+    double sumw;
+    double xsec;
+};
+std::map<std::string, MCInfo> Load_MC_Info(const std::filesystem::path &jsonPath)
+{
+    std::map<std::string, MCInfo> result;
+    std::ifstream inFile(jsonPath);
+    if (!inFile.is_open())
+    {
+        std::cout<<"Could not read json file at "<<jsonPath.string()<<std::endl;
+        return result;
+    }
+    
+    nlohmann::json j;
+    inFile >> j;
+
+    for(auto &[sampleName, fields]: j.items())
+    {
+        MCInfo info;
+        info.DSID = fields.value("DSID", 0.0);
+        info.events = fields.value("events", 0.0);
+        info.red_eff = fields.value("red_eff", 1.0);
+        info.sumw = fields.value("sumw", 0.0);
+        info.xsec = fields.value("xsec", 0.0);
+        result[sampleName] = info;
+    }
+    std::cout<<"SUCESSFULLY LOADED "<<jsonPath.string()<<std::endl;
+    return result;
+}
 
 // ANALYSIS FUNCTIONS
 bool Cut_Lep_Type(std::vector<unsigned int> *lep_type, bool print=false)
@@ -108,17 +152,18 @@ double Calc_Invariant_Mass(UInt_t lep_n, std::vector<float> *pt, std::vector<flo
 
 // MAIN METHOD
 void fourleptonanalysis() {
-    // OPEN FILE
+    // Read Info File for MC Sims
+    auto mcInfoFile = Load_MC_Info(MCINFOPATH);
 
-    // start with the A real data file
-    TFile *file = TFile::Open((DATADIRECTORY/lepA).string().c_str());
+    // OPEN REAL DATA FILE ---- LOOP HERE ---------------------
+    TFile *file = TFile::Open((DATADIRECTORY/testLepA).string().c_str());
     TTree *tree = file->Get<TTree>("mini");
     // check for sucessful location
     if(!tree){
         std::cerr << "Could not find tree 'mini' in file." <<std::endl;
         return;
     } else {
-        std::cout<<"SUCCESSFULLY READ file "<<(DATADIRECTORY/lepA).string()<<std::endl;
+        std::cout<<"SUCCESSFULLY READ file "<<(DATADIRECTORY/testLepA).string()<<std::endl;
     }
 
     // TRACK NEEDED VARS, lifted from the jupyter notebook from the open data release
@@ -156,14 +201,12 @@ void fourleptonanalysis() {
     //tree->SetBranchAddress("lep_tracksigd0pvunbiased", &lep_tracksigd0pvunbiased);
 
     TH1F *h_mass = new TH1F("h_mass", "Four-lepton invariant mass; m_{4l} [GeV]; Events", 36, 80, 250);
-
     Long64_t nEntries = tree->GetEntries(); // get number of entries, 39 for file A
     // im passing this as a long64_t since I imagine for full data sets the number of entries can excede the size of a 32 bit integer but its likely not needed for this exact use case
     // pass number of entires to console to check all is expected
     std::cout << "Number of Entires in Tree = " << nEntries << std::endl;     
 
     // ANALYSIS
-
     for(int i=0;i<nEntries;i++)
     {
         tree->GetEntry(i);
@@ -171,8 +214,6 @@ void fourleptonanalysis() {
         // Check for low transverse momentum, tight_ID and if lepton is isolated outside a jet
 
         if (lep_n != 4) continue; // we are interested only in 4 leptons
-        // this is already the case for the data set im using but worth adding in incase i switch to others
-
         // cut off entries without eeee, uuuu, or eeuu signals
         bool typeCutOff = Cut_Lep_Type(lep_type, true);
         // cut off entries with leptons that dont add up to 0 total charge
@@ -186,14 +227,13 @@ void fourleptonanalysis() {
         // calculate COM energy here using ROOT library
         double invarMass = Calc_Invariant_Mass(lep_n, lep_pt, lep_eta, lep_phi, lep_E);
         std::cout<<"Invariant mass of leptons = "<<invarMass<<" GeV"<<std::endl;
-
         // save result to histogram
         h_mass->Fill(invarMass);
-        
         std::cout<<std::endl;
     }
+    // END OF LOOP HERE -------------------
 
-    // lets draw the data
+    // DRAW
     // TODO stop this opening a window for some reason its a little annoying
     TCanvas *c1 = new TCanvas("c1", "c1");
     h_mass->Draw("E");
