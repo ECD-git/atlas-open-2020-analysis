@@ -11,5 +11,6 @@ V0.0
 - Apply calculations to data read from data files.
 - Invariant mass calculation to 4lepton data sets. (through my own 4vector library as well as ROOT's inbuilt one)
 - Draw analyzed data onto a histogram.
+- Read JSON files and map dictionaries.
 
 
