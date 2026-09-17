@@ -16,10 +16,12 @@
 
 std::filesystem::path FILEPATH = __FILE__;
 std::filesystem::path DATADIRECTORY = FILEPATH.parent_path()/"4lep/Data/";
-std::filesystem::path MCDIRECTORY = FILEPATH.parent_path()/"4lep/MC";
+std::filesystem::path MCDIRECTORY = FILEPATH.parent_path()/"4lep/MC/";
 std::filesystem::path testLepA = "data_A.4lep.root";
+std::filesystem::path testMC = "Zee";
 std::filesystem::path MCINFOPATH = FILEPATH.parent_path()/"mcinfofile.json";
 
+// TODO: MAP OF DIFFERENT SIGNALS WE WANT TO ANALYSE
 
 // MY OWN FOUR VECTOR STRUCT
 // Deprecated in favour of ROOT 4vector library, but useful to see exactly how the calculation goes
@@ -155,7 +157,7 @@ void fourleptonanalysis() {
     // Read Info File for MC Sims
     auto mcInfoFile = Load_MC_Info(MCINFOPATH);
 
-    // OPEN REAL DATA FILE ---- LOOP HERE ---------------------
+    // OPEN REAL DATA FILE ---- TODO: LOOP HERE OVER testLepA -------- for path in real data paths or something
     TFile *file = TFile::Open((DATADIRECTORY/testLepA).string().c_str());
     TTree *tree = file->Get<TTree>("mini");
     // check for sucessful location
@@ -231,7 +233,49 @@ void fourleptonanalysis() {
         h_mass->Fill(invarMass);
         std::cout<<std::endl;
     }
-    // END OF LOOP HERE -------------------
+    // END OF LOOP HERE for real data -------------------
+
+    // TODO, go through sim data, assigning a color to each background type
+    // MC ANALYSIS --- loop testMC -----------------------
+
+    auto it = mcInfoFile.find(testMC.string()); // find entry for dsid
+    if (it != mcInfoFile.end())
+    {
+        const MCInfo &s = it->second;
+        std::string mcFilePath = "mc_"+std::to_string(s.DSID)+'.'+testMC.string()+'.'+"4lep"+'.'+"root";
+
+        TFile *mcFile = TFile::Open((MCDIRECTORY/mcFilePath).string().c_str());
+        TTree *mcTree = file->Get<TTree>("mini"); // open file
+        // check for sucessful location
+        if(!mcTree){
+            std::cerr << "Could not find tree 'mini' in file." <<std::endl;
+            return;
+        } else {
+            std::cout<<"SUCCESSFULLY READ file "<<(MCDIRECTORY/mcFilePath).string()<<std::endl;
+        }
+        //mcTree->Print();
+
+        // TODO TOMORROW: write dowm all mc scalefactors needed and work from there
+        Float_t mcWeight;
+        Float_t scaleFactor_PILEUP;
+        Float_t scaleFactor_ELE;
+        Float_t scaleFactor_MUON;
+        Float_t scaleFactor_LepTRIGGER;
+        
+        mcTree->SetBranchAddress("mcWeight", &mcWeight);
+        mcTree->SetBranchAddress("scaleFactor_PILEUP", &scaleFactor_PILEUP);
+        mcTree->SetBranchAddress("scaleFactor_ELE", &scaleFactor_ELE);
+        mcTree->SetBranchAddress("scaleFactor_MUON", &scaleFactor_MUON);
+        mcTree->SetBranchAddress("scaleFactor_LepTRIGGER", &scaleFactor_LepTRIGGER);
+
+        Long64_t nMCEntries = mcTree->GetEntries();
+        std::cout << "Number of Entires in MCTree = " << nMCEntries << std::endl;
+        
+        //TH1F *h_mc = new TH1F("h_mc", "Four-lepton invariant mass; m_{4l} [GeV]; Events", 36, 80, 250);
+    
+        
+    }
+
 
     // DRAW
     // TODO stop this opening a window for some reason its a little annoying
