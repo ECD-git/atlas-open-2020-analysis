@@ -2,8 +2,8 @@
 A four lepton analysis to find the mass of the Higgs boson, using the 2020 Cern open data portal release.
 
 # TODO
-- Add in other 3 actual signal data sets
-- add in processing for the Monte-Carlo sims for background
+- add in extra cut off for the leptons (perhaps combine into one function).
+- play with the display options for the ROOT histograms
 
 # Versions
 V0.0
@@ -12,5 +12,6 @@ V0.0
 - Invariant mass calculation to 4lepton data sets. (through my own 4vector library as well as ROOT's inbuilt one)
 - Draw analyzed data onto a histogram.
 - Read JSON files and map dictionaries.
+- Iteration over sets of data files.
 
 
