@@ -24,29 +24,23 @@ std::string fileEnd = ".4lep.root";
 std::filesystem::path MCINFOPATH = FILEPATH.parent_path()/"mcinfofile.json";
 
 // any data specific data
-
-std::map<std::string, float> Luminosities; // in fb-1, int lumi for each data set
-Luminosities["data_A"] = 0.5;
-Luminosities["data_B"] = 1.9;
-Luminosities["data_C"] = 2.9;
-Luminosities["data_D"] = 4.7; // sum these for all 4 data sets total
-float Lumi = 10; // for all data
+float Lumi = 10; // fb-1, for sum of all data
 
 // TODO: MAP OF DIFFERENT SIGNALS WE WANT TO ANALYSE
 std::map<std::string, std::vector<std::string>> samples;
 std::map<std::string, std::vector<std::string>> MCs;
-std::map<std::string, std::string> colors;
+std::map<std::string, Color_t *> colors;
 samples["data"] = {"data_A", "data_B", "data_C", "data_D"};
 samples["MC"] = {"Background Z,t\bar{t}", "Background $ZZ^*$", "Signal ($m_H$ = 125 GeV)"};
 
 MCs["Background Z,t\bar{t}"] = {"Zee","Zmumu","ttbar_lep"};
-colors["Background Z,t\bar{t}"] = "#6b59d3";
+colors["Background Z,t\bar{t}"] = new Color_t(9);
 
 MCs["Background $ZZ^*$"] = {"llll"};
-colors["Background $ZZ^*$"] = "#ff0000";
+colors["Background $ZZ^*$"] = new Color_t(2);
 
 MCs["Signal ($m_H$ = 125 GeV)"] = {"ggH125_ZZ4lep","VBFH125_ZZ4lep","WH125_ZZ4lep","ZH125_ZZ4lep"};
-colors["Signal ($m_H$ = 125 GeV)"] = "#00cdff";
+colors["Signal ($m_H$ = 125 GeV)"] = new Color_t(4);
 
 // MY OWN FOUR VECTOR STRUCT
 // Deprecated in favour of ROOT 4vector library, but useful to see exactly how the calculation goes
@@ -184,16 +178,16 @@ void fourleptonanalysis() {
 
     // define histograms
     TH1F *h_mc_Zee = new TH1F("h_mc_Zee", "Background; m_{4l} [GeV]; Events", 36, 80, 250);
-    TH1F *h_mass_signal = new TH1F("h_mass_signal", "Signal; m_{4l} [GeV]; Events", 36, 80, 250);
 
     TH1F *h_data = nullptr;
-    TH1F *h_mc_ZTT = nullptr;
-    TH1F *h_mc_ZZ = nullptr;
-    TH1F *h_mc_HIGGS = nullptr;
+    std::map<std::string, TH1F *> H_BACKGROUND; // need to map these so they can be accessed later
+    H_BACKGROUND["Background Z,t\bar{t}"] = nullptr;
+    H_BACKGROUND["Background $ZZ^*$"] = nullptr;
+    H_BACKGROUND["Signal ($m_H$ = 125 GeV)"] = nullptr;
 
-    h_data = new TH1F("h_mass_signal", "Signal; m_{4l} [GeV]; Events", 36, 80, 250);
-
-    for (std::string dataFile : samples["data"]) // loop through all files in data
+    // ACTUAL DATA
+    h_data = new TH1F("h_data", "Data; m_{4l} [GeV]; Events", 36, 80, 250);
+    for (std::string &dataFile : samples["data"]) // loop through all files in data
     {
         TFile *file = TFile::Open((DATADIRECTORY/(dataFile+fileEnd)).string().c_str());
         TTree *tree = file->Get<TTree>("mini");
@@ -268,83 +262,89 @@ void fourleptonanalysis() {
         file->Close();
     }
 
-    // TODO, go through sim data, assigning a color to each background type
-    // MC ANALYSIS --- loop testMC -----------------------
+    // SIMULATION DATA
+    for (std::string &bgType : samples["MC"]) // loop over all types 
+    {   
+        // bgType is for assigning titles and color now
+        H_BACKGROUND[bgType] = new TH1F(("h_"+bgType).c_str(), (bgType + "; m_{4l} [GeV]; Events").c_str(), 36, 80, 250);
+        H_BACKGROUND[bgType]->SetFillColor(*colors[bgType]);
 
-    auto it = mcInfoFile.find(testMC.string()); // find entry for dsid
-    if (it != mcInfoFile.end())
-    {
-        const MCInfo &s = it->second;
-        std::string mcFilePath = "mc_"+std::to_string(s.DSID)+'.'+testMC.string()+'.'+"4lep"+'.'+"root";
-
-        TFile *mcFile = TFile::Open((MCDIRECTORY/mcFilePath).string().c_str());
-        TTree *mcTree = mcFile->Get<TTree>("mini"); // open file
-        // check for sucessful location
-        if(!mcTree){
-            std::cerr << "Could not find tree 'mini' in file." <<std::endl;
-            return;
-        } else {
-            std::cout<<"SUCCESSFULLY READ file "<<(MCDIRECTORY/mcFilePath).string()<<std::endl;
-        }
-        //mcTree->Print();
-
-        Float_t mcWeight;
-        Float_t scaleFactor_PILEUP;
-        Float_t scaleFactor_ELE;
-        Float_t scaleFactor_MUON;
-        Float_t scaleFactor_LepTRIGGER;
-        // TODO: im not sure the "mc" prefix is entirely necessary as at this point in the script the originals should be no longer needed but I REALLY dont want to be messing with memory allocation while im just figuring out how this works.
-        UInt_t mclep_n;
-        std::vector<int>     *mclep_charge = nullptr;
-        std::vector<unsigned int> *mclep_type = nullptr;
-        std::vector<float>   *mclep_pt = nullptr;
-        std::vector<float>   *mclep_eta = nullptr;
-        std::vector<float>   *mclep_phi = nullptr;
-        std::vector<float>   *mclep_E = nullptr;
-        
-        mcTree->SetBranchAddress("lep_n", &mclep_n);
-        mcTree->SetBranchAddress("mcWeight", &mcWeight);
-        mcTree->SetBranchAddress("scaleFactor_PILEUP", &scaleFactor_PILEUP);
-        mcTree->SetBranchAddress("scaleFactor_ELE", &scaleFactor_ELE);
-        mcTree->SetBranchAddress("scaleFactor_MUON", &scaleFactor_MUON);
-        mcTree->SetBranchAddress("scaleFactor_LepTRIGGER", &scaleFactor_LepTRIGGER);
-        // data stuff
-        mcTree->SetBranchAddress("lep_charge", &mclep_charge);
-        mcTree->SetBranchAddress("lep_type", &mclep_type);
-        mcTree->SetBranchAddress("lep_pt",&mclep_pt);
-        mcTree->SetBranchAddress("lep_eta", &mclep_eta);
-        mcTree->SetBranchAddress("lep_phi", &mclep_phi);
-        mcTree->SetBranchAddress("lep_E", &mclep_E);
-
-        Long64_t nMCEntries = mcTree->GetEntries();
-        std::cout << "Number of Entires in MCTree = " << nMCEntries << std::endl;
-    
-        float xsec_weight = (Lumi*1000*s.xsec)/(s.red_eff*s.sumw); // pb-1
-        std::cout<<"xsec_weight for MC file = "<<xsec_weight<<std::endl;
-
-        for (int i=0; i<nMCEntries; i++)
+        for (std::string &bgTypeFile : MCs[bgType]) // all input files per type
         {
-            mcTree->GetEntry(i);
-            // do the same data cutoffs as in the real data
-            if (mclep_n != 4) continue; // good just to check incase of errors
-            bool typeCutOff = Cut_Lep_Type(mclep_type, false);
-            bool chargeCutOff = Cut_Lep_Charge(mclep_charge, false);
-            if (typeCutOff || chargeCutOff)
+            auto it = mcInfoFile.find(bgTypeFile); // find entry for dsid
+            if (it != mcInfoFile.end())
             {
-                continue;
-            }
+                const MCInfo &s = it->second;
+                std::string mcFilePath = "mc_"+std::to_string(s.DSID)+'.'+bgTypeFile+fileEnd;
 
-            float total_weight = xsec_weight*mcWeight*scaleFactor_PILEUP*scaleFactor_ELE*scaleFactor_MUON*scaleFactor_LepTRIGGER;
-            //std::cout<<"Total Weight for MC Event = "<<total_weight<<std::endl;
+                TFile *mcFile = TFile::Open((MCDIRECTORY/mcFilePath).string().c_str());
+                TTree *mcTree = mcFile->Get<TTree>("mini"); // open file
+                // check for sucessful location
+                if(!mcTree){
+                    std::cerr << "Could not find tree 'mini' in file." <<std::endl;
+                    return;
+                } else {
+                    std::cout<<"SUCCESSFULLY READ file "<<(MCDIRECTORY/mcFilePath).string()<<std::endl;
+                }
 
-            // calc mass as before
-            double mcInvarMass = Calc_Invariant_Mass(mclep_n, mclep_pt, mclep_eta, mclep_phi, mclep_E);
-            //std::cout<<"Invariant mass of leptons = "<<mcInvarMass<<" GeV"<<std::endl;
-            // save result to histogram
-            h_mc_Zee->Fill(mcInvarMass, total_weight);
-            //std::cout<<std::endl;
+                Float_t mcWeight;
+                Float_t scaleFactor_PILEUP;
+                Float_t scaleFactor_ELE;
+                Float_t scaleFactor_MUON;
+                Float_t scaleFactor_LepTRIGGER;
+                // NOTE: im not sure the "mc" prefix is entirely necessary as at this point in the script the originals should be no longer needed but I REALLY dont want to be messing with memory allocation while im just figuring out how this works.
+                UInt_t mclep_n;
+                std::vector<int>     *mclep_charge = nullptr;
+                std::vector<unsigned int> *mclep_type = nullptr;
+                std::vector<float>   *mclep_pt = nullptr;
+                std::vector<float>   *mclep_eta = nullptr;
+                std::vector<float>   *mclep_phi = nullptr;
+                std::vector<float>   *mclep_E = nullptr;
+        
+                mcTree->SetBranchAddress("lep_n", &mclep_n);
+                mcTree->SetBranchAddress("mcWeight", &mcWeight);
+                mcTree->SetBranchAddress("scaleFactor_PILEUP", &scaleFactor_PILEUP);
+                mcTree->SetBranchAddress("scaleFactor_ELE", &scaleFactor_ELE);
+                mcTree->SetBranchAddress("scaleFactor_MUON", &scaleFactor_MUON);
+                mcTree->SetBranchAddress("scaleFactor_LepTRIGGER", &scaleFactor_LepTRIGGER);
+                mcTree->SetBranchAddress("lep_charge", &mclep_charge);
+                mcTree->SetBranchAddress("lep_type", &mclep_type);
+                mcTree->SetBranchAddress("lep_pt",&mclep_pt);
+                mcTree->SetBranchAddress("lep_eta", &mclep_eta);
+                mcTree->SetBranchAddress("lep_phi", &mclep_phi);
+                mcTree->SetBranchAddress("lep_E", &mclep_E);
+
+                Long64_t nMCEntries = mcTree->GetEntries();
+                std::cout << "Number of Entires in MCTree = " << nMCEntries << std::endl;
+            
+                float xsec_weight = (Lumi*1000*s.xsec)/(s.red_eff*s.sumw); // pb-1
+                std::cout<<"xsec_weight for MC file = "<<xsec_weight<<std::endl;
+
+                for (int i=0; i<nMCEntries; i++)
+                {
+                    mcTree->GetEntry(i);
+                    // do the same data cutoffs as in the real data
+                    if (mclep_n != 4) continue; // good just to check incase of errors
+                    bool typeCutOff = Cut_Lep_Type(mclep_type, false);
+                    bool chargeCutOff = Cut_Lep_Charge(mclep_charge, false);
+                    if (typeCutOff || chargeCutOff)
+                    {
+                        continue;
+                    }
+                    // TODO add in other stuff once done for real data ie truth matching.
+
+                    float total_weight = xsec_weight*mcWeight*scaleFactor_PILEUP*scaleFactor_ELE*scaleFactor_MUON*scaleFactor_LepTRIGGER;
+                    // calc mass as before
+                    double mcInvarMass = Calc_Invariant_Mass(mclep_n, mclep_pt, mclep_eta, mclep_phi, mclep_E);
+
+                    // save result to histogram
+                    H_BACKGROUND[bgType]->Fill(mcInvarMass, total_weight);
+                    // TODO: statistical uncertainty for the mc plots
+                }
+                mcFile->Close();
+            }   
         }
-    }   
+    }
 
     THStack *hs = new THStack("hs", "Four-lepton invariant mass; m_{4l} [GeV]; Events");
 
@@ -354,10 +354,10 @@ void fourleptonanalysis() {
     h_data->SetMarkerColor(kBlack);
     h_data->SetLineColor(kBlack);
 
-    // TODO: statistical uncertainty for the mc plots
-    h_mc_Zee->SetFillColor(kAzure - 9);
-
-    hs->Add(h_mc_Zee);
+    for (std::string &bgType : samples["MC"]) // loop over all types 
+    {
+        hs->Add(H_BACKGROUND[bgType]);
+    }
     
     double maxY = std::max(hs->GetMaximum(), h_data->GetMaximum());
     hs->SetMaximum(maxY * 1.2);
