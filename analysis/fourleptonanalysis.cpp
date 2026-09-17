@@ -11,6 +11,7 @@
 #include<TTree.h>
 #include<TH1F.h>
 #include<Math/Vector4D.h>
+#include<THStack.h>
 
 // enter data directory path
 
@@ -20,6 +21,14 @@ std::filesystem::path MCDIRECTORY = FILEPATH.parent_path()/"4lep/MC/";
 std::filesystem::path testLepA = "data_A.4lep.root";
 std::filesystem::path testMC = "Zee";
 std::filesystem::path MCINFOPATH = FILEPATH.parent_path()/"mcinfofile.json";
+
+// any data specific data
+
+std::map<std::string, float> Luminosities; // in fb-1, int lumi for each data set
+Luminosities["data_A"] = 0.5;
+Luminosities["data_B"] = 1.9;
+Luminosities["data_C"] = 2.9;
+Luminosities["data_D"] = 4.7; // sum these for all 4 data sets total
 
 // TODO: MAP OF DIFFERENT SIGNALS WE WANT TO ANALYSE
 
@@ -157,6 +166,10 @@ void fourleptonanalysis() {
     // Read Info File for MC Sims
     auto mcInfoFile = Load_MC_Info(MCINFOPATH);
 
+    // define histograms
+    TH1F *h_mc_Zee = new TH1F("h_mc_Zee", "Four-lepton invariant mass; m_{4l} [GeV]; Events", 36, 80, 250);
+    TH1F *h_mass_signal = new TH1F("h_mass_signal", "Four-lepton invariant mass; m_{4l} [GeV]; Events", 36, 80, 250);
+
     // OPEN REAL DATA FILE ---- TODO: LOOP HERE OVER testLepA -------- for path in real data paths or something
     TFile *file = TFile::Open((DATADIRECTORY/testLepA).string().c_str());
     TTree *tree = file->Get<TTree>("mini");
@@ -202,7 +215,6 @@ void fourleptonanalysis() {
     //tree->SetBranchAddress("lep_trackd0pvunbiased", &lep_trackd0pvunbiased);
     //tree->SetBranchAddress("lep_tracksigd0pvunbiased", &lep_tracksigd0pvunbiased);
 
-    TH1F *h_mass = new TH1F("h_mass", "Four-lepton invariant mass; m_{4l} [GeV]; Events", 36, 80, 250);
     Long64_t nEntries = tree->GetEntries(); // get number of entries, 39 for file A
     // im passing this as a long64_t since I imagine for full data sets the number of entries can excede the size of a 32 bit integer but its likely not needed for this exact use case
     // pass number of entires to console to check all is expected
@@ -217,21 +229,20 @@ void fourleptonanalysis() {
 
         if (lep_n != 4) continue; // we are interested only in 4 leptons
         // cut off entries without eeee, uuuu, or eeuu signals
-        bool typeCutOff = Cut_Lep_Type(lep_type, true);
+        bool typeCutOff = Cut_Lep_Type(lep_type, false);
         // cut off entries with leptons that dont add up to 0 total charge
-        bool chargeCutOff = Cut_Lep_Charge(lep_charge, true);
+        bool chargeCutOff = Cut_Lep_Charge(lep_charge, false);
         // continue if we are skipping
         if (typeCutOff || chargeCutOff)
         {
-            std::cout<<std::endl;
             continue;
         }
         // calculate COM energy here using ROOT library
         double invarMass = Calc_Invariant_Mass(lep_n, lep_pt, lep_eta, lep_phi, lep_E);
-        std::cout<<"Invariant mass of leptons = "<<invarMass<<" GeV"<<std::endl;
+        //std::cout<<"Invariant mass of leptons = "<<invarMass<<" GeV"<<std::endl;
         // save result to histogram
-        h_mass->Fill(invarMass);
-        std::cout<<std::endl;
+        h_mass_signal->Fill(invarMass);
+        //std::cout<<std::endl;
     }
     // END OF LOOP HERE for real data -------------------
 
@@ -245,7 +256,7 @@ void fourleptonanalysis() {
         std::string mcFilePath = "mc_"+std::to_string(s.DSID)+'.'+testMC.string()+'.'+"4lep"+'.'+"root";
 
         TFile *mcFile = TFile::Open((MCDIRECTORY/mcFilePath).string().c_str());
-        TTree *mcTree = file->Get<TTree>("mini"); // open file
+        TTree *mcTree = mcFile->Get<TTree>("mini"); // open file
         // check for sucessful location
         if(!mcTree){
             std::cerr << "Could not find tree 'mini' in file." <<std::endl;
@@ -253,34 +264,79 @@ void fourleptonanalysis() {
         } else {
             std::cout<<"SUCCESSFULLY READ file "<<(MCDIRECTORY/mcFilePath).string()<<std::endl;
         }
-        //mcTree->Print();
+        mcTree->Print();
 
-        // TODO TOMORROW: write dowm all mc scalefactors needed and work from there
         Float_t mcWeight;
         Float_t scaleFactor_PILEUP;
         Float_t scaleFactor_ELE;
         Float_t scaleFactor_MUON;
         Float_t scaleFactor_LepTRIGGER;
+        // TODO: im not sure the "mc" prefix is entirely necessary as at this point in the script the originals should be no longer needed but I REALLY dont want to be messing with memory allocation while im just figuring out how this works.
+        UInt_t mclep_n;
+        std::vector<int>     *mclep_charge = nullptr;
+        std::vector<unsigned int> *mclep_type = nullptr;
+        std::vector<float>   *mclep_pt = nullptr;
+        std::vector<float>   *mclep_eta = nullptr;
+        std::vector<float>   *mclep_phi = nullptr;
+        std::vector<float>   *mclep_E = nullptr;
         
+        mcTree->SetBranchAddress("lep_n", &mclep_n);
         mcTree->SetBranchAddress("mcWeight", &mcWeight);
         mcTree->SetBranchAddress("scaleFactor_PILEUP", &scaleFactor_PILEUP);
         mcTree->SetBranchAddress("scaleFactor_ELE", &scaleFactor_ELE);
         mcTree->SetBranchAddress("scaleFactor_MUON", &scaleFactor_MUON);
         mcTree->SetBranchAddress("scaleFactor_LepTRIGGER", &scaleFactor_LepTRIGGER);
+        // data stuff
+        mcTree->SetBranchAddress("lep_charge", &mclep_charge);
+        mcTree->SetBranchAddress("lep_type", &mclep_type);
+        mcTree->SetBranchAddress("lep_pt",&mclep_pt);
+        mcTree->SetBranchAddress("lep_eta", &mclep_eta);
+        mcTree->SetBranchAddress("lep_phi", &mclep_phi);
+        mcTree->SetBranchAddress("lep_E", &mclep_E);
 
         Long64_t nMCEntries = mcTree->GetEntries();
         std::cout << "Number of Entires in MCTree = " << nMCEntries << std::endl;
-        
-        //TH1F *h_mc = new TH1F("h_mc", "Four-lepton invariant mass; m_{4l} [GeV]; Events", 36, 80, 250);
     
-        
-    }
+        float xsec_weight = (Luminosities["data_A"]*1000*s.xsec)/(s.red_eff*s.sumw); // pb-1
+        std::cout<<"xsec_weight for MC file = "<<xsec_weight<<std::endl;
 
+        for (int i=0; i<nMCEntries; i++)
+        {
+            mcTree->GetEntry(i);
+            // do the same data cutoffs as in the real data
+            if (lep_n != 4) continue; // good just to check incase of errors
+            bool typeCutOff = Cut_Lep_Type(mclep_type, false);
+            bool chargeCutOff = Cut_Lep_Charge(mclep_charge, false);
+            if (typeCutOff || chargeCutOff)
+            {
+                continue;
+            }
+
+            float total_weight = xsec_weight*mcWeight*scaleFactor_PILEUP*scaleFactor_ELE*scaleFactor_MUON*scaleFactor_LepTRIGGER;
+            //std::cout<<"Total Weight for MC Event = "<<total_weight<<std::endl;
+
+            // calc mass as before
+            double mcInvarMass = Calc_Invariant_Mass(mclep_n, mclep_pt, mclep_eta, mclep_phi, mclep_E);
+            //std::cout<<"Invariant mass of leptons = "<<mcInvarMass<<" GeV"<<std::endl;
+            // save result to histogram
+            h_mc_Zee->Fill(mcInvarMass, total_weight);
+            //std::cout<<std::endl;
+        }
+    }   
+
+    THStack *hs = new THStack("hs", "Four-lepton invariant mass; m_{4l} [GeV]; Events");
+
+    h_mc_Zee->SetFillColor(kAzure - 9);
+    h_mass_signal->SetFillColor(kRed - 7);
+
+    hs->Add(h_mc_Zee);
+    hs->Add(h_mass_signal);
 
     // DRAW
     // TODO stop this opening a window for some reason its a little annoying
     TCanvas *c1 = new TCanvas("c1", "c1");
-    h_mass->Draw("E");
+    hs->Draw("HIST");
+    h_mass_signal->Draw("E SAME");
     c1->SaveAs("four_lepton_mass.png");
 
     file->Close();
