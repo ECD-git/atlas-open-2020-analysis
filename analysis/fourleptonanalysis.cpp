@@ -12,6 +12,7 @@
 #include<TH1F.h>
 #include<Math/Vector4D.h>
 #include<THStack.h>
+#include<TLegend.h>
 
 // enter data directory path
 
@@ -26,21 +27,21 @@ std::filesystem::path MCINFOPATH = FILEPATH.parent_path()/"mcinfofile.json";
 // any data specific data
 float Lumi = 10; // fb-1, for sum of all data
 
-// TODO: MAP OF DIFFERENT SIGNALS WE WANT TO ANALYSE
+// MAP OF DIFFERENT SIGNALS WE WANT TO ANALYSE
 std::map<std::string, std::vector<std::string>> samples;
 std::map<std::string, std::vector<std::string>> MCs;
 std::map<std::string, Color_t *> colors;
 samples["data"] = {"data_A", "data_B", "data_C", "data_D"};
-samples["MC"] = {"Background Z,t\bar{t}", "Background $ZZ^*$", "Signal ($m_H$ = 125 GeV)"};
+samples["MC"] = {"Background Z,t#bar{t}", "Background ZZ^{*}", "Signal (m_{H} = 125 GeV)"};
 
-MCs["Background Z,t\bar{t}"] = {"Zee","Zmumu","ttbar_lep"};
-colors["Background Z,t\bar{t}"] = new Color_t(9);
+MCs["Background Z,t#bar{t}"] = {"Zee","Zmumu","ttbar_lep"};
+colors["Background Z,t#bar{t}"] = new Color_t(9);
 
-MCs["Background $ZZ^*$"] = {"llll"};
-colors["Background $ZZ^*$"] = new Color_t(2);
+MCs["Background ZZ^{*}"] = {"llll"};
+colors["Background ZZ^{*}"] = new Color_t(2);
 
-MCs["Signal ($m_H$ = 125 GeV)"] = {"ggH125_ZZ4lep","VBFH125_ZZ4lep","WH125_ZZ4lep","ZH125_ZZ4lep"};
-colors["Signal ($m_H$ = 125 GeV)"] = new Color_t(4);
+MCs["Signal (m_{H} = 125 GeV)"] = {"ggH125_ZZ4lep","VBFH125_ZZ4lep","WH125_ZZ4lep","ZH125_ZZ4lep"};
+colors["Signal (m_{H} = 125 GeV)"] = new Color_t(4);
 
 // MY OWN FOUR VECTOR STRUCT
 // Deprecated in favour of ROOT 4vector library, but useful to see exactly how the calculation goes
@@ -177,16 +178,15 @@ void fourleptonanalysis() {
     auto mcInfoFile = Load_MC_Info(MCINFOPATH);
 
     // define histograms
-    TH1F *h_mc_Zee = new TH1F("h_mc_Zee", "Background; m_{4l} [GeV]; Events", 36, 80, 250);
-
     TH1F *h_data = nullptr;
     std::map<std::string, TH1F *> H_BACKGROUND; // need to map these so they can be accessed later
-    H_BACKGROUND["Background Z,t\bar{t}"] = nullptr;
-    H_BACKGROUND["Background $ZZ^*$"] = nullptr;
-    H_BACKGROUND["Signal ($m_H$ = 125 GeV)"] = nullptr;
+    H_BACKGROUND["Background Z,t#bar{t}"] = nullptr;
+    H_BACKGROUND["Background ZZ^{*}"] = nullptr;
+    H_BACKGROUND["Signal (m_{H} = 125 GeV)"] = nullptr;
 
     // ACTUAL DATA
     h_data = new TH1F("h_data", "Data; m_{4l} [GeV]; Events", 36, 80, 250);
+    h_data->SetFillColor(10);
     for (std::string &dataFile : samples["data"]) // loop through all files in data
     {
         TFile *file = TFile::Open((DATADIRECTORY/(dataFile+fileEnd)).string().c_str());
@@ -363,12 +363,19 @@ void fourleptonanalysis() {
     hs->SetMaximum(maxY * 1.2);
 
     // DRAW
-    TCanvas *c1 = new TCanvas("c1", "c1", 1200, 800);
+    TCanvas *c1 = new TCanvas("c1", "c1", 1000, 800);
 
     hs->Draw("HIST");
     h_data->Draw("E SAME");
-    c1->BuildLegend(0.65, 0.75, 0.88, 0.88);
-    c1->SaveAs("four_lepton_mass.png");
 
+    TLegend *leg = new TLegend(0.65, 0.75, 0.88, 0.88);
+    leg->AddEntry(h_data, "data", "lp");
+    for (std::string &bgType : samples["MC"]) // loop over all types 
+    {
+        leg->AddEntry(("h_"+bgType).c_str(), bgType.c_str(), "f");
+    }
+    leg->Draw();
+    
+    c1->SaveAs("four_lepton_mass.png");
     std::cout<<"Sucessful execution."<<std::endl;
 }
