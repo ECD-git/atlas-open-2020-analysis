@@ -243,15 +243,19 @@ void fourleptonanalysis() {
             // Check for low transverse momentum, tight_ID and if lepton is isolated outside a jet
 
             if (lep_n != 4) continue; // we are interested only in 4 leptons
+
             // cut off entries without eeee, uuuu, or eeuu signals
             bool typeCutOff = Cut_Lep_Type(lep_type, false);
+
             // cut off entries with leptons that dont add up to 0 total charge
             bool chargeCutOff = Cut_Lep_Charge(lep_charge, false);
+
             // continue if we are skipping
             if (typeCutOff || chargeCutOff)
             {
                 continue;
             }
+            
             // calculate COM energy here using ROOT library
             double invarMass = Calc_Invariant_Mass(lep_n, lep_pt, lep_eta, lep_phi, lep_E);
             // save result to histogram
@@ -267,6 +271,7 @@ void fourleptonanalysis() {
     {   
         // bgType is for assigning titles and color now
         H_BACKGROUND[bgType] = new TH1F(("h_"+bgType).c_str(), (bgType + "; m_{4l} [GeV]; Events").c_str(), 36, 80, 250);
+        H_BACKGROUND[bgType]->Sumw2(); // tells histogram to track sum of squared wieghts per bin
         H_BACKGROUND[bgType]->SetFillColor(*colors[bgType]);
 
         for (std::string &bgTypeFile : MCs[bgType]) // all input files per type
@@ -346,7 +351,11 @@ void fourleptonanalysis() {
         }
     }
 
+    // DRAW
+    // store total background stacked
     THStack *hs = new THStack("hs", "Four-lepton invariant mass; m_{4l} [GeV]; Events");
+    // store background statistical uncertainties
+    TH1F *h_mc_total = new TH1F("h_mc_total", "Syst Uncert; m_{4l} [GeV]; Events", 36, 80, 250);
 
     h_data->SetFillColor(kRed - 7);
     h_data->SetMarkerStyle(20); 
@@ -354,22 +363,29 @@ void fourleptonanalysis() {
     h_data->SetMarkerColor(kBlack);
     h_data->SetLineColor(kBlack);
 
-    for (std::string &bgType : samples["MC"]) // loop over all types 
+    for (std::string &bgType : samples["MC"]) // loop over all types to stack bgs
     {
         hs->Add(H_BACKGROUND[bgType]);
+        h_mc_total->Add(H_BACKGROUND[bgType]);
     }
     
+    // ensure range of hist does not cut off any data
     double maxY = std::max(hs->GetMaximum(), h_data->GetMaximum());
     hs->SetMaximum(maxY * 1.2);
+    // stat uncert styling
+    h_mc_total->SetFillColor(kGray + 2);
+    h_mc_total->SetFillStyle(3345);   // hatched pattern
+    h_mc_total->SetMarkerSize(0); 
 
-    // DRAW
     TCanvas *c1 = new TCanvas("c1", "c1", 1000, 800);
 
     hs->Draw("HIST");
+    h_mc_total->Draw("E2 SAME");
     h_data->Draw("E SAME");
 
     TLegend *leg = new TLegend(0.65, 0.75, 0.88, 0.88);
     leg->AddEntry(h_data, "data", "lp");
+    leg->AddEntry(h_mc_total, "Stat. uncert", "f");
     for (std::string &bgType : samples["MC"]) // loop over all types 
     {
         leg->AddEntry(("h_"+bgType).c_str(), bgType.c_str(), "f");
