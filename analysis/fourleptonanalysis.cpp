@@ -14,6 +14,12 @@
 #include<THStack.h>
 #include<TLegend.h>
 
+// Variables for histograms
+const double xmin = 80;
+const double xmax = 250;
+const int stepsize = 5;
+const int nbinsx = (xmax - xmin)/5;
+
 // enter data directory path
 
 std::filesystem::path FILEPATH = __FILE__;
@@ -115,6 +121,16 @@ std::map<std::string, MCInfo> Load_MC_Info(const std::filesystem::path &jsonPath
 }
 
 // ANALYSIS FUNCTIONS
+bool Cut_Lep_isTight(std::vector<bool> *lep_isTightID)
+{
+    if (std::find(lep_isTightID->begin(), lep_isTightID->end(), false) != lep_isTightID->end())
+    {
+        return true;
+    } else {
+        return false;
+    }
+}
+
 bool Cut_Lep_Type(std::vector<unsigned int> *lep_type, bool print=false)
 {
     // sum the lepton types for each entry, electron is 11, muon is 13,
@@ -185,7 +201,7 @@ void fourleptonanalysis() {
     H_BACKGROUND["Signal (m_{H} = 125 GeV)"] = nullptr;
 
     // ACTUAL DATA
-    h_data = new TH1F("h_data", "Data; m_{4l} [GeV]; Events", 36, 80, 250);
+    h_data = new TH1F("h_data", "Data; m_{4l} [GeV]; Events", nbinsx, xmin, xmax);
     h_data->SetFillColor(10);
     for (std::string &dataFile : samples["data"]) // loop through all files in data
     {
@@ -210,7 +226,7 @@ void fourleptonanalysis() {
         //std::vector<float>   *lep_z0 = nullptr;
         std::vector<int>     *lep_charge = nullptr;
         std::vector<unsigned int> *lep_type = nullptr;
-        //std::vector<bool>    *lep_isTightID = nullptr;
+        std::vector<bool>    *lep_isTightID = nullptr;
         //std::vector<float>   *lep_ptcone30 = nullptr;
         //std::vector<float>   *lep_etcone20 = nullptr;
         //std::vector<float>   *lep_trackd0pvunbiased = nullptr;
@@ -226,7 +242,7 @@ void fourleptonanalysis() {
         //tree->SetBranchAddress("lep_z0", &lep_z0);
         tree->SetBranchAddress("lep_charge", &lep_charge);
         tree->SetBranchAddress("lep_type", &lep_type);
-        //tree->SetBranchAddress("lep_isTightID", &lep_isTightID);
+        tree->SetBranchAddress("lep_isTightID", &lep_isTightID);
         //tree->SetBranchAddress("lep_ptcone30", &lep_ptcone30);
         //tree->SetBranchAddress("lep_etcone20", &lep_etcone20);
         //tree->SetBranchAddress("lep_trackd0pvunbiased", &lep_trackd0pvunbiased);
@@ -243,19 +259,13 @@ void fourleptonanalysis() {
             // Check for low transverse momentum, tight_ID and if lepton is isolated outside a jet
 
             if (lep_n != 4) continue; // we are interested only in 4 leptons
-
+            // cut off if lepton has a false tight ID
+            //if (Cut_Lep_isTight(lep_isTightID)) continue;
             // cut off entries without eeee, uuuu, or eeuu signals
-            bool typeCutOff = Cut_Lep_Type(lep_type, false);
-
+            if (Cut_Lep_Type(lep_type, false)) continue;
             // cut off entries with leptons that dont add up to 0 total charge
-            bool chargeCutOff = Cut_Lep_Charge(lep_charge, false);
+            if (Cut_Lep_Charge(lep_charge, false)) continue;
 
-            // continue if we are skipping
-            if (typeCutOff || chargeCutOff)
-            {
-                continue;
-            }
-            
             // calculate COM energy here using ROOT library
             double invarMass = Calc_Invariant_Mass(lep_n, lep_pt, lep_eta, lep_phi, lep_E);
             // save result to histogram
@@ -270,7 +280,7 @@ void fourleptonanalysis() {
     for (std::string &bgType : samples["MC"]) // loop over all types 
     {   
         // bgType is for assigning titles and color now
-        H_BACKGROUND[bgType] = new TH1F(("h_"+bgType).c_str(), (bgType + "; m_{4l} [GeV]; Events").c_str(), 36, 80, 250);
+        H_BACKGROUND[bgType] = new TH1F(("h_"+bgType).c_str(), (bgType + "; m_{4l} [GeV]; Events").c_str(), nbinsx, xmin, xmax);
         H_BACKGROUND[bgType]->Sumw2(); // tells histogram to track sum of squared wieghts per bin
         H_BACKGROUND[bgType]->SetFillColor(*colors[bgType]);
 
@@ -355,7 +365,7 @@ void fourleptonanalysis() {
     // store total background stacked
     THStack *hs = new THStack("hs", "Four-lepton invariant mass; m_{4l} [GeV]; Events");
     // store background statistical uncertainties
-    TH1F *h_mc_total = new TH1F("h_mc_total", "Syst Uncert; m_{4l} [GeV]; Events", 36, 80, 250);
+    TH1F *h_mc_total = new TH1F("h_mc_total", "Syst Uncert; m_{4l} [GeV]; Events", nbinsx, xmin, xmax);
 
     h_data->SetFillColor(kRed - 7);
     h_data->SetMarkerStyle(20); 
@@ -391,6 +401,12 @@ void fourleptonanalysis() {
         leg->AddEntry(("h_"+bgType).c_str(), bgType.c_str(), "f");
     }
     leg->Draw();
+
+    // draw text
+    TLatex Text;
+    Text.SetNDC();              // coordinates as fractions of the pad (0 to 1), not data units
+    Text.SetTextSize(0.04);
+    Text.DrawLatex(0.6, 0.65, "#sqrt{s} = 13 TeV, #int L = 10.0 fb^{-1}");
     
     c1->SaveAs("four_lepton_mass.png");
     std::cout<<"Sucessful execution."<<std::endl;
