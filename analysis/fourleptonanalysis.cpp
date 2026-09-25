@@ -354,14 +354,31 @@ void fourleptonanalysis() {
 
                     // save result to histogram
                     H_BACKGROUND[bgType]->Fill(mcInvarMass, total_weight);
-                    // TODO: statistical uncertainty for the mc plots
                 }
                 mcFile->Close();
             }   
         }
     }
 
-    // DRAW
+    // calculate signal significance = N_signal/root(N_otherbackground)
+    // from visual inspection, Higgs signal is significnt between 115 GeV to 130 GeV (under these hist settings)
+    float higher = 130;
+    float lower = 115; // replace with function params
+    int lowerbin = (int)((lower-xmin)/stepsize) + 1;
+    int higherbin = (int)((higher-xmin)/stepsize + 0.5) + 1;
+    float N_sig = 0;
+    float N_bg = 0;
+    for (std::string &bgtype : samples["MC"])
+    {
+        for (int i = lowerbin; i<higherbin; i++)
+        {
+            if (bgtype != "Signal (m_{H} = 125 GeV)") N_bg += H_BACKGROUND[bgtype]->At(i);
+            N_sig += H_BACKGROUND[bgtype]->At(i);
+        }
+    }
+    float stat_sig = N_sig / std::sqrt(N_bg + (0.3*std::pow(N_bg,2))); // extra term for unaccounted uncert
+    std::cout<<"Statistical Significance = "<<stat_sig<<std::endl;
+
     // store total background stacked
     THStack *hs = new THStack("hs", "Four-lepton invariant mass; m_{4l} [GeV]; Events");
     // store background statistical uncertainties
@@ -378,7 +395,9 @@ void fourleptonanalysis() {
         hs->Add(H_BACKGROUND[bgType]);
         h_mc_total->Add(H_BACKGROUND[bgType]);
     }
-    
+
+    // DRAWING 
+
     // ensure range of hist does not cut off any data
     double maxY = std::max(hs->GetMaximum(), h_data->GetMaximum());
     hs->SetMaximum(maxY * 1.2);
