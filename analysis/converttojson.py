@@ -1,3 +1,5 @@
+# A simple script to convert the provided mcinfofile.py to a json file, so that it may be used in cpp more readily.
+
 import json
 import importlib.util
 import pathlib
