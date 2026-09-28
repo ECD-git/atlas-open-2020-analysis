@@ -32,6 +32,8 @@ std::filesystem::path MCINFOPATH = FILEPATH.parent_path()/"mcinfofile.json";
 
 // any data specific data
 float Lumi = 10; // fb-1, for sum of all data
+// determined by isolating lepton groups and cutting off where signal is insignificant below
+std::vector<float> pt_cutoffs{30,20,10}; //GeV
 
 // MAP OF DIFFERENT SIGNALS WE WANT TO ANALYSE
 std::map<std::string, std::vector<std::string>> samples;
@@ -200,6 +202,11 @@ void fourleptonanalysis() {
     H_BACKGROUND["Background ZZ^{*}"] = nullptr;
     H_BACKGROUND["Signal (m_{H} = 125 GeV)"] = nullptr;
 
+    std::map<std::string, TH1F *> H_MOMENTUMCUTTEST;
+    H_MOMENTUMCUTTEST["Background Z,t#bar{t}"] = nullptr;
+    H_MOMENTUMCUTTEST["Background ZZ^{*}"] = nullptr;
+    H_MOMENTUMCUTTEST["Signal (m_{H} = 125 GeV)"] = nullptr;
+
     // ACTUAL DATA
     h_data = new TH1F("h_data", "Data; m_{4l} [GeV]; Events", nbinsx, xmin, xmax);
     h_data->SetFillColor(10);
@@ -250,7 +257,7 @@ void fourleptonanalysis() {
 
         Long64_t nEntries = tree->GetEntries(); // get number of entries, 39 for file A
         std::cout << "Number of Entires in Tree = " << nEntries << std::endl;     
-
+        std::cout<<std::endl;
         // ANALYSIS
         for(int i=0;i<nEntries;i++)
         {
@@ -284,6 +291,13 @@ void fourleptonanalysis() {
         H_BACKGROUND[bgType] = new TH1F(("h_"+bgType).c_str(), (bgType + "; m_{4l} [GeV]; Events").c_str(), nbinsx, xmin, xmax);
         H_BACKGROUND[bgType]->Sumw2(); // tells histogram to track sum of squared wieghts per bin
         H_BACKGROUND[bgType]->SetFillColor(*colors[bgType]);
+
+        H_MOMENTUMCUTTEST[bgType] = new TH1F(("h_"+bgType).c_str(), (bgType + "; m_{4l} [GeV]; Events").c_str(), 250/5, 0, 250);
+        H_MOMENTUMCUTTEST[bgType]->Sumw2(); // tells histogram to track sum of squared wieghts per bin
+        H_MOMENTUMCUTTEST[bgType]->SetFillStyle(0);
+        H_MOMENTUMCUTTEST[bgType]->SetLineStyle(1);
+        H_MOMENTUMCUTTEST[bgType]->SetLineWidth(2);
+        H_MOMENTUMCUTTEST[bgType]->SetLineColor(*colors[bgType]);
 
         for (std::string &bgTypeFile : MCs[bgType]) // all input files per type
         {
@@ -335,27 +349,33 @@ void fourleptonanalysis() {
 
                 Long64_t nMCEntries = mcTree->GetEntries();
                 std::cout << "Number of Entires in MCTree = " << nMCEntries << std::endl;
-            
+                std::cout<<std::endl;
                 float xsec_weight = (Lumi*1000*s.xsec)/(s.red_eff*s.sumw); // pb-1
-                std::cout<<"xsec_weight for MC file = "<<xsec_weight<<std::endl;
 
                 for (int i=0; i<nMCEntries; i++)
                 {
+                    // TODO add in other stuff once done for real data ie truth matching.
                     mcTree->GetEntry(i);
                     // do the same data cutoffs as in the real data
                     if (mclep_n != 4) continue; // good just to check incase of errors
                     if (Cut_Lep_isTight(mclep_isTightID)) continue;
                     if (Cut_Lep_Type(mclep_type, false)) continue;
                     if (Cut_Lep_Charge(mclep_charge, false)) continue;
-                    if (typeCutOff || chargeCutOff)
-                    // TODO add in other stuff once done for real data ie truth matching.
 
+                    // transverse momentum cutting
+                    // lep_pt vector is already sorted in order leading, sub-leading, third-leading and last-leading
+                    
+
+                    
+                    
                     float total_weight = xsec_weight*mcWeight*scaleFactor_PILEUP*scaleFactor_ELE*scaleFactor_MUON*scaleFactor_LepTRIGGER;
                     // calc mass as before
                     double mcInvarMass = Calc_Invariant_Mass(mclep_n, mclep_pt, mclep_eta, mclep_phi, mclep_E);
 
                     // save result to histogram
                     H_BACKGROUND[bgType]->Fill(mcInvarMass, total_weight);
+                    // save the pt of leading lepton group for transverse momentum cutoff
+                    H_MOMENTUMCUTTEST[bgType]->Fill(mclep_pt->at(0)/1000, total_weight);
                 }
                 mcFile->Close();
             }   
@@ -385,6 +405,8 @@ void fourleptonanalysis() {
     THStack *hs = new THStack("hs", "Four-lepton invariant mass; m_{4l} [GeV]; Events");
     // store background statistical uncertainties
     TH1F *h_mc_total = new TH1F("h_mc_total", "Syst Uncert; m_{4l} [GeV]; Events", nbinsx, xmin, xmax);
+    // store total background lepton groupings
+    THStack *hs_MOMENTUMCUTTEST = new THStack("hs_MOMENTUMCUTTEST", "Leading lepton; m_{4l} [GeV]; Events");
 
     h_data->SetFillColor(kRed - 7);
     h_data->SetMarkerStyle(20); 
@@ -396,6 +418,7 @@ void fourleptonanalysis() {
     {
         hs->Add(H_BACKGROUND[bgType]);
         h_mc_total->Add(H_BACKGROUND[bgType]);
+        hs_MOMENTUMCUTTEST->Add(H_MOMENTUMCUTTEST[bgType]);
     }
 
     // DRAWING 
@@ -407,7 +430,7 @@ void fourleptonanalysis() {
     h_mc_total->SetFillColor(kGray + 2);
     h_mc_total->SetFillStyle(3345);   // hatched pattern
     h_mc_total->SetMarkerSize(0); 
-
+    
     TCanvas *c1 = new TCanvas("c1", "c1", 1000, 800);
 
     hs->Draw("HIST");
@@ -430,5 +453,20 @@ void fourleptonanalysis() {
     Text.DrawLatex(0.6, 0.65, "#sqrt{s} = 13 TeV, #int L = 10.0 fb^{-1}");
     
     c1->SaveAs("four_lepton_mass.png");
+    
+    /*
+    // draw lepton groups isolated
+    TCanvas *c2 = new TCanvas("c2", "c2", 1000,800);
+    hs_MOMENTUMCUTTEST->Draw("HIST");
+
+    TLegend *leg2 = new TLegend(0.65, 0.75, 0.88, 0.88);
+    for (std::string &bgType : samples["MC"]) // loop over all types 
+    {
+        leg2->AddEntry(("h_"+bgType).c_str(), bgType.c_str(), "f");
+    }
+    leg2->Draw();
+
+    c2->SaveAs("leading-lepton-pt.png");
+    */
     std::cout<<"Sucessful execution."<<std::endl;
 }
