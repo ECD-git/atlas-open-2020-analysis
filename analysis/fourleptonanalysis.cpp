@@ -33,7 +33,7 @@ std::filesystem::path MCINFOPATH = FILEPATH.parent_path()/"mcinfofile.json";
 // any data specific data
 float Lumi = 10; // fb-1, for sum of all data
 // determined by isolating lepton groups and cutting off where signal is insignificant below
-std::vector<float> pt_cutoffs{30,20,10}; //GeV
+std::vector<float> pt_cutoffs{30,20,10}; //GeV, for leading, sub leading and third leading
 
 // MAP OF DIFFERENT SIGNALS WE WANT TO ANALYSE
 std::map<std::string, std::vector<std::string>> samples;
@@ -364,9 +364,9 @@ void fourleptonanalysis() {
 
                     // transverse momentum cutting
                     // lep_pt vector is already sorted in order leading, sub-leading, third-leading and last-leading
-                    
-
-                    
+                    if(mclep_pt->at(0)/1000 < pt_cutoffs[0]) continue;
+                    if(mclep_pt->at(1)/1000 < pt_cutoffs[1]) continue;
+                    if(mclep_pt->at(2)/1000 < pt_cutoffs[2]) continue;
                     
                     float total_weight = xsec_weight*mcWeight*scaleFactor_PILEUP*scaleFactor_ELE*scaleFactor_MUON*scaleFactor_LepTRIGGER;
                     // calc mass as before
