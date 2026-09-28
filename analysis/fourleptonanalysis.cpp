@@ -255,12 +255,13 @@ void fourleptonanalysis() {
         for(int i=0;i<nEntries;i++)
         {
             tree->GetEntry(i);
-            // TODO:
-            // Check for low transverse momentum, tight_ID and if lepton is isolated outside a jet
-
+            
             if (lep_n != 4) continue; // we are interested only in 4 leptons
+            // TODO:
+            // Check for low transverse momentum and if lepton is isolated outside a jet
+
             // cut off if lepton has a false tight ID
-            //if (Cut_Lep_isTight(lep_isTightID)) continue;
+            if (Cut_Lep_isTight(lep_isTightID)) continue;
             // cut off entries without eeee, uuuu, or eeuu signals
             if (Cut_Lep_Type(lep_type, false)) continue;
             // cut off entries with leptons that dont add up to 0 total charge
@@ -328,6 +329,9 @@ void fourleptonanalysis() {
                 mcTree->SetBranchAddress("lep_eta", &mclep_eta);
                 mcTree->SetBranchAddress("lep_phi", &mclep_phi);
                 mcTree->SetBranchAddress("lep_E", &mclep_E);
+                
+                std::vector<bool>    *mclep_isTightID = nullptr;
+                mcTree->SetBranchAddress("lep_isTightID", &mclep_isTightID);
 
                 Long64_t nMCEntries = mcTree->GetEntries();
                 std::cout << "Number of Entires in MCTree = " << nMCEntries << std::endl;
@@ -340,12 +344,10 @@ void fourleptonanalysis() {
                     mcTree->GetEntry(i);
                     // do the same data cutoffs as in the real data
                     if (mclep_n != 4) continue; // good just to check incase of errors
-                    bool typeCutOff = Cut_Lep_Type(mclep_type, false);
-                    bool chargeCutOff = Cut_Lep_Charge(mclep_charge, false);
+                    if (Cut_Lep_isTight(mclep_isTightID)) continue;
+                    if (Cut_Lep_Type(mclep_type, false)) continue;
+                    if (Cut_Lep_Charge(mclep_charge, false)) continue;
                     if (typeCutOff || chargeCutOff)
-                    {
-                        continue;
-                    }
                     // TODO add in other stuff once done for real data ie truth matching.
 
                     float total_weight = xsec_weight*mcWeight*scaleFactor_PILEUP*scaleFactor_ELE*scaleFactor_MUON*scaleFactor_LepTRIGGER;
