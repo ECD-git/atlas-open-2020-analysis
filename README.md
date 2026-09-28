@@ -3,7 +3,7 @@ A four lepton analysis to find the mass of the Higgs boson, using the 2020 Cern 
 
 # Dependencies
 - ROOT library (TFile.h, TTree.h, TH1F.h, THStack.h, TLegend.h)
-- json.hpp
+- json.hpp (https://github.com/nlohmann/json)
 - STD::Math
 
 # Features
