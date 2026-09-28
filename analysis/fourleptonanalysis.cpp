@@ -264,8 +264,6 @@ void fourleptonanalysis() {
             tree->GetEntry(i);
             
             if (lep_n != 4) continue; // we are interested only in 4 leptons
-            // TODO:
-            // Check for low transverse momentum and if lepton is isolated outside a jet
 
             // cut off if lepton has a false tight ID
             if (Cut_Lep_isTight(lep_isTightID)) continue;
@@ -354,7 +352,6 @@ void fourleptonanalysis() {
 
                 for (int i=0; i<nMCEntries; i++)
                 {
-                    // TODO add in other stuff once done for real data ie truth matching.
                     mcTree->GetEntry(i);
                     // do the same data cutoffs as in the real data
                     if (mclep_n != 4) continue; // good just to check incase of errors
