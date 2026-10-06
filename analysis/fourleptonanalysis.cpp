@@ -273,7 +273,7 @@ void fourleptonanalysis() {
         {
             tree->GetEntry(i);
             
-            if (lep_n != 4) continue; // we are interested only in 4 leptons
+            if (lep_n < 4) continue; // we are interested only in 4 leptons
 
             // cut off if lepton has a false tight ID
             if (Cut_Lep_isTight(lep_isTightID)) continue;
@@ -364,7 +364,7 @@ void fourleptonanalysis() {
                 {
                     mcTree->GetEntry(i);
                     // do the same data cutoffs as in the real data
-                    if (mclep_n != 4) continue; // good just to check incase of errors
+                    if (mclep_n < 4) continue; // good just to check incase of errors
                     if (Cut_Lep_isTight(mclep_isTightID)) continue;
                     if (Cut_Lep_Type(mclep_type, false)) continue;
                     if (Cut_Lep_Charge(mclep_charge, false)) continue;
