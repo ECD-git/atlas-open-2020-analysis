@@ -405,7 +405,7 @@ void fourleptonanalysis() {
             N_sig += H_BACKGROUND[bgtype]->At(i);
         }
     }
-    float stat_sig = N_sig / std::sqrt(N_bg + 0.3*std::pow(N_bg,2)); // extra term for unaccounted uncert
+    float stat_sig = N_sig / std::sqrt(N_bg + std::pow(0.3*N_bg,2)); // extra term for unaccounted uncert
     std::cout<<"Statistical Significance = "<<stat_sig<<std::endl;
 
     // store total background stacked
